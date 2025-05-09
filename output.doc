@@ -1,0 +1,35 @@
+Folder PATH listing for volume OS
+Volume serial number is 2E69-13CB
+C:.
++---.idea
+|   \---inspectionProfiles
++---ESP32-CAM
+|   \---Deteccion
+\---ReciclajeIA
+    +---Models
+    \---yolov5
+        +---.github
+        |   +---ISSUE_TEMPLATE
+        |   \---workflows
+        +---classify
+        +---data
+        |   +---hyps
+        |   +---images
+        |   \---scripts
+        +---models
+        |   +---hub
+        |   +---segment
+        |   \---__pycache__
+        +---segment
+        +---utils
+        |   +---aws
+        |   +---docker
+        |   +---flask_rest_api
+        |   +---google_app_engine
+        |   +---loggers
+        |   |   +---clearml
+        |   |   +---comet
+        |   |   \---wandb
+        |   +---segment
+        |   \---__pycache__
+        \---__pycache__
