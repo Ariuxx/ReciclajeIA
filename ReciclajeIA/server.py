@@ -13,7 +13,6 @@ model = YOLO("Models/best.pt")
 # Ruta donde se guardará la imagen temporalmente
 IMAGE_PATH = "static/ultima.jpg"
 
-# Asegura que la carpeta 'static' exista
 os.makedirs("static", exist_ok=True)
 
 

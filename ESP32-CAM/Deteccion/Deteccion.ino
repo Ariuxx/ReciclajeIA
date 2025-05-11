@@ -4,12 +4,10 @@
 #include <ArduinoJson.h>
 #include <Base64.h>
 
-// ===========================
-// Selección del modelo de cámara
-// ===========================
+
 #define CAMERA_MODEL_WROVER_KIT // Has PSRAM
 
-#include "camera_pins.h"  // Este archivo contiene los pines específicos para tu cámara
+#include "camera_pins.h" 
 
 // ===========================
 // Configuración Wi-Fi
@@ -101,7 +99,7 @@ void loop() {
 
   // Enviar la solicitud POST al servidor Flask
   HTTPClient http;
-  http.begin(serverIp);  // Asegúrate de que IP y puerto estén correctos
+  http.begin(serverIp);  
   http.addHeader("Content-Type", "application/json");
 
   int httpCode = http.POST(payload);
