@@ -101,24 +101,27 @@ void loop() {
 
   // Enviar la solicitud POST al servidor Flask
   HTTPClient http;
-  http.begin(serverIp);  // Dirección IP del servidor Flask
+  http.begin(serverIp);  // Asegúrate de que IP y puerto estén correctos
   http.addHeader("Content-Type", "application/json");
 
-  // Enviar el payload
   int httpCode = http.POST(payload);
+  Serial.print("Código HTTP: ");
+  Serial.println(httpCode);
 
   if (httpCode > 0) {
     String response = http.getString();
     Serial.println("Respuesta del servidor: " + response);
   } else {
-    Serial.println("Error en la solicitud HTTP");
+    Serial.println("Error en la solicitud HTTP: " + http.errorToString(httpCode));
   }
 
-  // Liberar la imagen capturada
+  http.end();
   esp_camera_fb_return(fb);
 
   // Espera antes de capturar la siguiente imagen
   delay(5000);  // Esperar 5 segundos antes de capturar una nueva imagen
 }
+
+
 
 

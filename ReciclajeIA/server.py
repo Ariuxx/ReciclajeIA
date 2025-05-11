@@ -1,82 +1,75 @@
-from aiohttp import web
-import numpy as np
-import torch
+from flask import Flask, request, jsonify, send_file, render_template_string
+from ultralytics import YOLO
 import cv2
-from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.general import check_img_size, non_max_suppression
-from yolov5.utils.plots import scale_coords
-from yolov5.utils.torch_utils import select_device
-from PIL import Image
+import numpy as np
+import os
 import base64
-import io
 
-# ==== Cargar el modelo YOLOv5 ====
-weights = 'Models/best.pt'  # Ruta a tu modelo best.pt
-device = select_device('')  # Selecciona el dispositivo (CPU o GPU)
-model = DetectMultiBackend(weights, device=device)
-stride, names, pt = model.stride, model.names, model.pt
-img_size = check_img_size(640, s=stride)  # Tamaño de imagen para el modelo
+app = Flask(__name__)
 
-# Función para procesar las imágenes recibidas
-async def clasificar_base64(request):
-    try:
-        # Obtener los datos de la solicitud (base64)
-        data = await request.json()
-        image_data = data.get("image")
-        if not image_data:
-            return web.json_response({'error': 'No image data received'}, status=400)
+# Cargar el modelo YOLOv8
+model = YOLO("Models/best.pt")
 
-        # Decodificar la imagen desde base64
-        img_data = base64.b64decode(image_data)
-        nparr = np.frombuffer(img_data, np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+# Ruta donde se guardará la imagen temporalmente
+IMAGE_PATH = "static/ultima.jpg"
 
-        if frame is None:
-            return web.json_response({'error': 'No se pudo decodificar la imagen'}, status=400)
+# Asegura que la carpeta 'static' exista
+os.makedirs("static", exist_ok=True)
 
-        # Realizar la inferencia
-        im0 = frame.copy()
-        img = cv2.resize(im0, (640, 640))
-        img = img[:, :, ::-1].transpose(2, 0, 1)
-        img = np.ascontiguousarray(img)
 
-        # Preparar la imagen para el modelo
-        img_tensor = torch.from_numpy(img).to(device)
-        img_tensor = img_tensor.float() / 255.0
-        if img_tensor.ndimension() == 3:
-            img_tensor = img_tensor.unsqueeze(0)
+@app.route('/clasificar-base64', methods=['POST'])
+def clasificar_base64():
+    # Verificar si se recibió una imagen
+    if not request.json or 'image' not in request.json:
+        return jsonify({'error': 'No se recibió imagen en base64'}), 400
 
-        # Inferencia con el modelo
-        pred = model(img_tensor, augment=False, visualize=False)
-        pred = non_max_suppression(pred, 0.25, 0.45)
+    # Obtener la imagen en base64 desde la solicitud JSON
+    base64_image = request.json['image']
 
-        # Procesar los resultados
-        resultados = []
-        for det in pred:
-            if len(det):
-                det[:, :4] = scale_coords(img_tensor.shape[2:], det[:, :4], im0.shape).round()
-                for *xyxy, conf, cls in det:
-                    etiqueta = f'{names[int(cls)]} {conf:.2f}'
-                    resultados.append({'clase': names[int(cls)], 'confianza': float(conf)})
+    # Decodificar la imagen desde base64
+    img_data = base64.b64decode(base64_image)
+    npimg = np.frombuffer(img_data, dtype=np.uint8)
+    frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
 
-        return web.json_response({'resultados': resultados})
+    # Guardar imagen original para verla
+    cv2.imwrite(IMAGE_PATH, frame)
 
-    except Exception as e:
-        return web.json_response({'error': str(e)}, status=500)
+    # Procesar la imagen con YOLOv8
+    results = model(frame)
 
-# Configurar la aplicación Aiohttp
-app = web.Application()
+    # Extraer las detecciones de los objetos
+    detections = []
+    for box in results[0].boxes:
+        detections.append({
+            "class": model.names[int(box.cls)],
+            "confidence": float(box.conf),
+            "bbox": box.xyxy[0].tolist()  # Coordenadas de la caja delimitadora
+        })
 
-# Definir las rutas correctamente
-app.router.add_post('/clasificar-base64', clasificar_base64)  # Ruta para recibir imágenes en base64
+    return jsonify(detections)
 
-# Iniciar el servidor
+
+@app.route('/ver')
+def ver_imagen():
+    # Página HTML para mostrar la imagen
+    html = '''
+    <html>
+    <head><title>Vista desde ESP32</title></head>
+    <body>
+        <h2>Imagen enviada por la ESP32</h2>
+        <img src="/static/ultima.jpg" width="640"/>
+        <br><br>
+        <form method="get">
+            <button type="submit">Actualizar</button>
+        </form>
+    </body>
+    </html>
+    '''
+    return render_template_string(html)
+
+
 if __name__ == '__main__':
-    web.run_app(app, host='192.168.1.72', port=5000)
-
-
-
-
+    app.run(host="0.0.0.0", port=5000)
 
 """# Web Sockets
 # Mensaje a enviar al ESP32
