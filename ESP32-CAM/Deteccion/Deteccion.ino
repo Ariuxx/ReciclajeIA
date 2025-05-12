@@ -4,37 +4,32 @@
 #include <ArduinoJson.h>
 #include <Base64.h>
 
+#define CAMERA_MODEL_WROVER_KIT
+#include "camera_pins.h"
 
-#define CAMERA_MODEL_WROVER_KIT // Has PSRAM
-
-#include "camera_pins.h" 
-
-// ===========================
-// Configuración Wi-Fi
-// ===========================
-const char *ssid = "INFINITUM4C77";
-const char *password = "x7xv72kfPp";
+const char *ssid = "INFINITUMF5FD_2.4";
+const char *password = "266fpqEFLe";
 
 // Dirección IP del servidor Flask
-String serverIp = "http://192.168.1.72:5000/clasificar-base64"; // IP del servidor Flask
+String serverIp = "http://192.168.1.74:5000/clasificar-form";
 
 void setup() {
-  // Inicia comunicación serial
   Serial.begin(115200);
-  Serial.setDebugOutput(true);
+  Serial.setDebugOutput(false);
   Serial.println();
 
-  // Conéctate al Wi-Fi
+  // Conexión Wi-Fi
   WiFi.begin(ssid, password);
+  Serial.print("Conectando a Wi-Fi");
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.print(".");
   }
-  Serial.println("Conectado a Wi-Fi");
-  Serial.print("Dirección IP: ");
+  Serial.println("\nConectado a Wi-Fi");
+  Serial.print("Dirección IP local: ");
   Serial.println(WiFi.localIP());
 
-  // Configuración de la cámara
+  // Configuración cámara
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
   config.ledc_timer = LEDC_TIMER_0;
@@ -55,71 +50,63 @@ void setup() {
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
-  config.frame_size = FRAMESIZE_UXGA;  // Resolución máxima
-  config.pixel_format = PIXFORMAT_JPEG;  // Formato JPEG
+  config.frame_size = FRAMESIZE_UXGA;
+  config.pixel_format = PIXFORMAT_JPEG;
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
   config.fb_location = CAMERA_FB_IN_PSRAM;
   config.jpeg_quality = 12;
   config.fb_count = 1;
 
-  // Inicialización de la cámara
+  // Inicializar cámara
   esp_err_t err = esp_camera_init(&config);
   if (err != ESP_OK) {
-    Serial.printf("Error al inicializar la cámara: 0x%x\n", err);
+    Serial.printf("Error al inicializar cámara: 0x%x\n", err);
     return;
   }
 
-  sensor_t *s = esp_camera_sensor_get();
-  // Ajustes iniciales del sensor
-  if (s->id.PID == OV3660_PID) {
-    s->set_vflip(s, 1);
-    s->set_brightness(s, 1);
-    s->set_saturation(s, -2);
-  }
-
-  Serial.println("Conexión WiFi completada.");
+  Serial.println("Cámara inicializada correctamente.");
 }
 
 void loop() {
-  // Captura la imagen
-  camera_fb_t *fb = esp_camera_fb_get();
-  if (!fb) {
-    Serial.println("Error al capturar la imagen");
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Wi-Fi desconectado.");
     return;
   }
 
-  // Convertir la imagen a base64
+  camera_fb_t *fb = esp_camera_fb_get();
+  if (!fb || fb->len == 0) {
+    Serial.println("Error al capturar imagen o imagen vacía.");
+    return;
+  }
+
+  // Codificar imagen a Base64
   String base64Image = base64::encode(fb->buf, fb->len);
+  if (base64Image.length() == 0) {
+    Serial.println("Error: imagen codificada está vacía.");
+    esp_camera_fb_return(fb);
+    return;
+  }
 
-  // Crear el JSON para enviar al servidor
-  StaticJsonDocument<200> doc;
-  doc["image"] = base64Image;  // Aquí ponemos la imagen en base64
-  String payload;
-  serializeJson(doc, payload);
+  // Crear JSON
+  StaticJsonDocument<1024> doc;
+  doc["image"] = base64Image;
+  String jsonStr;
+  serializeJson(doc, jsonStr);
 
-  // Enviar la solicitud POST al servidor Flask
+  // Enviar al servidor
   HTTPClient http;
-  http.begin(serverIp);  
+  http.begin(serverIp);
   http.addHeader("Content-Type", "application/json");
+  int httpCode = http.POST(jsonStr);
 
-  int httpCode = http.POST(payload);
   Serial.print("Código HTTP: ");
   Serial.println(httpCode);
-
-  if (httpCode > 0) {
-    String response = http.getString();
-    Serial.println("Respuesta del servidor: " + response);
-  } else {
-    Serial.println("Error en la solicitud HTTP: " + http.errorToString(httpCode));
-  }
+  String response = http.getString();
+  Serial.println("Respuesta del servidor: " + response);
 
   http.end();
   esp_camera_fb_return(fb);
 
-  // Espera antes de capturar la siguiente imagen
-  delay(5000);  // Esperar 5 segundos antes de capturar una nueva imagen
+  delay(1000); // Esperar 5 segundos
 }
-
-
-
 

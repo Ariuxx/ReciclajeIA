@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_file, render_template_string
+from flask import Flask, request, jsonify, render_template_string
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -12,40 +12,52 @@ model = YOLO("Models/best.pt")
 
 # Ruta donde se guardará la imagen temporalmente
 IMAGE_PATH = "static/ultima.jpg"
-
 os.makedirs("static", exist_ok=True)
 
 
-@app.route('/clasificar-base64', methods=['POST'])
-def clasificar_base64():
-    # Verificar si se recibió una imagen
-    if not request.json or 'image' not in request.json:
-        return jsonify({'error': 'No se recibió imagen en base64'}), 400
+@app.route('/clasificar-form', methods=['POST'])
+def clasificar_form():
+    if not request.is_json:
+        return jsonify({'error': 'Se esperaba un JSON'}), 400
 
-    # Obtener la imagen en base64 desde la solicitud JSON
-    base64_image = request.json['image']
+    try:
+        data = request.get_json()
 
-    # Decodificar la imagen desde base64
-    img_data = base64.b64decode(base64_image)
-    npimg = np.frombuffer(img_data, dtype=np.uint8)
-    frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+        # Validar presencia y contenido del campo "image"
+        if 'image' not in data or not data['image']:
+            return jsonify({'error': 'No se recibió imagen válida'}), 400
 
-    # Guardar imagen original para verla
-    cv2.imwrite(IMAGE_PATH, frame)
+        # Obtener la imagen en base64 y decodificar
+        try:
+            img_data = base64.b64decode(data['image'])
+        except Exception:
+            return jsonify({'error': 'No se pudo decodificar la imagen en base64'}), 400
 
-    # Procesar la imagen con YOLOv8
-    results = model(frame)
+        # Convertir bytes a imagen OpenCV
+        npimg = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
 
-    # Extraer las detecciones de los objetos
-    detections = []
-    for box in results[0].boxes:
-        detections.append({
-            "class": model.names[int(box.cls)],
-            "confidence": float(box.conf),
-            "bbox": box.xyxy[0].tolist()  # Coordenadas de la caja delimitadora
-        })
+        if frame is None:
+            return jsonify({'error': 'La imagen no pudo ser interpretada por OpenCV'}), 400
 
-    return jsonify(detections)
+        # Guardar imagen
+        cv2.imwrite(IMAGE_PATH, frame)
+
+        # Clasificar con YOLO
+        results = model(frame)
+        detections = []
+
+        for box in results[0].boxes:
+            detections.append({
+                "class": model.names[int(box.cls)],
+               #confidence": float(box.conf),
+                #"bbox": box.xyxy[0].tolist()
+            })
+
+        return jsonify(detections)
+
+    except Exception as e:
+        return jsonify({'error': f'Ocurrió un error: {str(e)}'}), 500
 
 
 @app.route('/ver')
@@ -53,22 +65,26 @@ def ver_imagen():
     # Página HTML para mostrar la imagen
     html = '''
     <html>
-    <head><title>Vista desde ESP32</title></head>
+    <head>
+        <title>Vista desde ESP32</title>
+        <meta http-equiv="refresh" content="0.5"> <!-- Auto-refresh -->
+    </head>
     <body>
         <h2>Imagen enviada por la ESP32</h2>
         <img src="/static/ultima.jpg" width="640"/>
-        <br><br>
-        <form method="get">
-            <button type="submit">Actualizar</button>
-        </form>
+        <p>(Se actualiza cada 0.5 segundos)</p>
     </body>
     </html>
     '''
     return render_template_string(html)
+def home():
+    return "<h3>Servidor activo. Ir a <a href='/ver'>/ver</a> para ver la imagen.</h3>"
+
 
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
+
 
 """# Web Sockets
 # Mensaje a enviar al ESP32
