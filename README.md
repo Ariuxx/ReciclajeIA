@@ -16,8 +16,14 @@ git lfs pull
 
 ```bash
 cd ReciclajeIA
-pip install -r requirements.txt    # nota: requirements.txt está en UTF-16
-python server.py                   # arranca en http://0.0.0.0:5000
+
+# 1. Crear y activar un entorno virtual
+python -m venv .venv
+source .venv/bin/activate           # Windows: .venv\Scripts\activate
+
+# 2. Instalar dependencias y arrancar
+pip install -r requirements.txt     # nota: requirements.txt está en UTF-16
+python server.py                    # arranca en http://0.0.0.0:5000
 ```
 
 > Ejecútalo siempre desde el directorio `ReciclajeIA/`: las rutas a `Models/best.pt` y `static/` son relativas.
@@ -64,13 +70,19 @@ cd ReciclajeIA
 python testModel.py     # muestra detecciones en tiempo real; pulsa 'q' para salir
 ```
 
-### 4. Ver la última imagen recibida
+#### Cómo obtener la IP del servidor en tu Wi-Fi
 
-Abre [http://localhost:5000/ver](http://localhost:5000/ver) en el navegador.
+Ejecuta en el equipo donde corre Flask y copia la IP de tu red local (suele empezar por `192.168.` o `10.`):
 
-## ESP32-CAM
+```bash
+# Linux
+ip addr show | grep "inet "        # o: hostname -I
 
-El firmware (`ESP32-CAM/Deteccion/Deteccion.ino`) captura una foto cada ~1 s, la codifica en base64 y la envía al servidor. Antes de compilarlo en el IDE de Arduino ajusta:
+# macOS
+ipconfig getifaddr en0
 
-- `ssid` / `password` — credenciales de tu red Wi-Fi.
-- `serverIp` — IP del equipo donde corre el servidor Flask (misma red local).
+# Windows
+ipconfig                           # busca "Dirección IPv4"
+```
+
+Pon esa IP en `serverIp` dentro de `Deteccion.ino` (el servidor escucha en el puerto `5000`).
