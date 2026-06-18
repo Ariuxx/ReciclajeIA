@@ -50,14 +50,80 @@ def clasificar_form():
         for box in results[0].boxes:
             detections.append({
                 "class": model.names[int(box.cls)],
-               #confidence": float(box.conf),
-                #"bbox": box.xyxy[0].tolist()
+                "confidence": float(box.conf[0]),
+                "bbox": box.xyxy[0].tolist()
             })
 
         return jsonify(detections)
 
     except Exception as e:
         return jsonify({'error': f'Ocurrió un error: {str(e)}'}), 500
+
+
+@app.route('/detectar', methods=['POST'])
+def detectar():
+    if not request.is_json:
+        return jsonify({'error': 'Se esperaba un JSON'}), 400
+
+    try:
+        data = request.get_json()
+
+        # Validar presencia y contenido del campo "image"
+        if 'image' not in data or not data['image']:
+            return jsonify({'error': 'No se recibió imagen válida'}), 400
+
+        # Obtener la imagen en base64 y decodificar
+        try:
+            img_data = base64.b64decode(data['image'])
+        except Exception:
+            return jsonify({'error': 'No se pudo decodificar la imagen en base64'}), 400
+
+        # Convertir bytes a imagen OpenCV
+        npimg = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
+
+        if frame is None:
+            return jsonify({'error': 'La imagen no pudo ser interpretada por OpenCV'}), 400
+
+        # Guardar imagen
+        cv2.imwrite(IMAGE_PATH, frame)
+
+        # Dimensiones de la imagen recibida (alto, ancho)
+        image_height, image_width = frame.shape[:2]
+
+        # Clasificar con YOLO
+        results = model(frame, verbose=False)
+        detections = []
+
+        for box in results[0].boxes:
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            detections.append({
+                "class": model.names[int(box.cls)],
+                "confidence": float(box.conf[0]),
+                "box": {
+                    "x": x1,
+                    "y": y1,
+                    "width": x2 - x1,
+                    "height": y2 - y1
+                }
+            })
+
+        # Log de la petición con el número de detecciones encontradas
+        print(f"[/detectar] {len(detections)} detección(es) encontrada(s)", flush=True)
+
+        return jsonify({
+            "detections": detections,
+            "image_width": image_width,
+            "image_height": image_height
+        })
+
+    except Exception as e:
+        return jsonify({'error': f'Ocurrió un error: {str(e)}'}), 500
+
+
+@app.route('/health')
+def health():
+    return jsonify({"status": "ok"})
 
 
 @app.route('/ver')

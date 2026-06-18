@@ -11,14 +11,17 @@ if not cap.isOpened():
     print("No se pudo abrir la cámara")
     exit()
 
+# Crear una única ventana reutilizable
+cv2.namedWindow("Detección en tiempo real", cv2.WINDOW_NORMAL)
+
 while True:
     ret, frame = cap.read()
     if not ret:
         print("No se pudo leer el frame")
         break
 
-    # Ejecutar la detección
-    results = model(frame, imgsz=640)  # Puedes ajustar el tamaño si quieres
+    # Ejecutar la detección (verbose=False evita el log por cada frame)
+    results = model(frame, imgsz=640, verbose=False)
 
     # Dibujar resultados en la imagen
     annotated_frame = results[0].plot()
